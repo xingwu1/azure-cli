@@ -6,18 +6,15 @@
 import json
 import os
 
-from azure.mgmt.batch.models import (BatchAccountCreateParameters,
-                                     AutoStorageBaseProperties,
-                                     UpdateApplicationParameters)
+from azure.batch.models import (
+    PoolAddParameter, CloudServiceConfiguration, VirtualMachineConfiguration,
+    ImageReference, PoolInformation, JobAddParameter,
+    JobConstraints, StartTask)
+from azure.cli.command_modules.ncj_batch._file_utils import (
+    FileUtils, resolve_file_paths, upload_blob)
+import azure.cli.core.azlogging as azlogging
 
-from azure.batch.models import (PoolAddParameter, CloudServiceConfiguration, VirtualMachineConfiguration,
-                                ImageReference, PoolInformation, JobAddParameter,
-                                JobConstraints, TaskConstraints, PoolUpdatePropertiesParameter,
-                                StartTask)
-from azure.cli.command_modules.batch._file_utils import FileUtils
-import azure.cli.core._logging as _logging
-
-logger = _logging.get_az_logger(__name__)
+logger = azlogging.get_az_logger(__name__)
 
 # NCJ custom commands
 
@@ -92,21 +89,21 @@ def create_job(client, json_file=None, job_id=None, pool_id=None, priority=None,
 create_job.__doc__ = JobAddParameter.__doc__ + "\n" + JobConstraints.__doc__
 
 
-def upload_file(client, resource_group_name, account_name,
+def upload_file(client, resource_group_name, account_name,  # pylint: disable=too-many-arguments
                 local_path, file_group, remote_path=None, flatten=None):
     """Upload local file or directory of files to storage"""
     file_utils = FileUtils(client, resource_group_name, account_name)
-    blob_client = file_utils.resolve_storage_account(client, resource_group_name, account_name)
-    path, files = file_utils.resolve_file_paths(local_path)
-    if files.count > 0:
-        for file in files:
-            file_name = os.path.relpath(file, path)
-            file_utils.upload_blob(file, file_group, file_name, blob_client,
-                                   remote_path=remote_path, flatten=flatten)
+    blob_client = file_utils.resolve_storage_account()
+    path, files = resolve_file_paths(local_path)
+    if len(files) > 0:
+        for f in files:
+            file_name = os.path.relpath(f, path)
+            upload_blob(f, file_group, file_name, blob_client,
+                        remote_path=remote_path, flatten=flatten)
     else:
         raise ValueError('No files or directories found matching local path {}'.format(local_path))
 
 
-def download_file(client, resource_group_name, account_name,
-                local_path, file_group, remote_path=None, flatten=None):
+def download_file(client, resource_group_name, account_name,  # pylint: disable=too-many-arguments, unused-argument
+                  local_path, file_group, remote_path=None, flatten=None):  # pylint: disable=unused-argument
     pass
