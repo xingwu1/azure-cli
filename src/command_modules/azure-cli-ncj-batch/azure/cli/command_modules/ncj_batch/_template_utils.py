@@ -3,7 +3,7 @@
 # Licensed under the MIT License. See License.txt in the project root for license information.
 # --------------------------------------------------------------------------------------------
 
-
+# pylint: disable=too-many-lines
 import copy
 import itertools
 import json
@@ -24,7 +24,7 @@ logger = azlogging.get_az_logger(__name__)
 
 _ROOT_FILE_UPLOAD_URL = 'https://raw.githubusercontent.com/Azure/azure-xplat-cli/batch-beta'
 _FILE_EGRESS_OVERRIDE = 'FILE_EGRESS_OVERRIDE_URL'
-_FILE_EGRESS_ENV_NAME = 'AZ_BATCH_FILE_UPLOAD_CONFIG';
+_FILE_EGRESS_ENV_NAME = 'AZ_BATCH_FILE_UPLOAD_CONFIG'
 _FILE_EGRESS_RESOURCES = {
     'lib/commands/batch/fileegress/batchfileuploader.py'
     'lib/commands/batch/fileegress/configuration.py',
@@ -36,26 +36,26 @@ _FILE_EGRESS_RESOURCES = {
 # These properties are reserved for application template use
 # and may not be used on jobs using an application template
 _PROPS_RESERVED_FOR_TEMPLATES = {
-    'jobManagerTask', 
-    'jobPreparationTask', 
-    'jobReleaseTask', 
+    'jobManagerTask',
+    'jobPreparationTask',
+    'jobReleaseTask',
     'commonEnvironmentSettings',
     'usesTaskDependencies',
-    'onAllTasksComplete', 
-    'onTaskFailure', 
+    'onAllTasksComplete',
+    'onTaskFailure',
     'taskFactory'}
 _PROPS_PERMITTED_ON_TEMPLATES = _PROPS_RESERVED_FOR_TEMPLATES.union({
     'templateMetadata',
     'parameters',
     'metadata'})
-# These properties are reserved for job use 
+# These properties are reserved for job use
 # and may not be used on an application template
 _PROPS_RESERVED_FOR_JOBS = {
-    'id', 
+    'id',
     'displayName',
     'priority',
-    'constraints', 
-    'poolInfo', 
+    'constraints',
+    'poolInfo',
     'applicationTemplateInfo'}
 # Properties on a repeatTask object that should be
 # applied to each expanded task.
@@ -135,9 +135,9 @@ def _validate_bool(value):
         raise TypeError()
 
 
-def _is_substitution(content, start, end):
-    """This is to support non-ARM-style direct parameter string substitution as a 
-    simplification of the concat function. We may wish to remove this 
+def _is_substitution(template, start, end):
+    """This is to support non-ARM-style direct parameter string substitution as a
+    simplification of the concat function. We may wish to remove this
     if we want to adhere more strictly to ARM.
     :param str content: The contents of an expression from the template.
     :param int start: The start index of the expression.
@@ -171,7 +171,8 @@ def _find_nested(delimiter, content, start_index):
     """
     index = start_index
     while index < len(content):
-        if content[index] == delimiter:
+        char = content[index]
+        if char == delimiter:
             return index
         elif char == '[':
             index = _find_nested(']', content, index + 1)
@@ -204,10 +205,11 @@ def _merge_metadata(base_metadata, more_metadata):
     if base_metadata:
         result.extend(base_metadata)
     if more_metadata:
-        conflicts = [k for k in [m['name'] for m in more_metadata] if k in [m['name'] for m in result]]
+        conflicts = [k for k in [m['name'] for m in more_metadata] \
+            if k in [m['name'] for m in result]]
         if conflicts:
             raise ValueError("May not have multiple definitions for metadata "
-                             "value(s) '{}'".format(', '.joib(conflicts)))
+                             "value(s) '{}'".format(', '.join(conflicts)))
         else:
             result.extend(more_metadata)
     return result
@@ -227,11 +229,9 @@ def _get_installation_cmdline(references, os_flavor):
     :param dict references: Package installation references.
     :param str os_flavor: The pool OS flavor.
     """
+    # pylint: disable=too-many-statements
     if not references:
         return
-    is_apt = False
-    is_choco = False
-    is_yum = False
     builder = ""
     package_type = None
     type_error = 'PackageReferences may only contain a single type of package reference.'
@@ -241,7 +241,7 @@ def _get_installation_cmdline(references, os_flavor):
         if reference['type'] == 'aptPackage':
             if package_type and package_type != 'apt':
                 raise ValueError(type_error)
-            if os_flavor != pool_utils.PoolOperatingSystemFlavor.linux:
+            if os_flavor != pool_utils.PoolOperatingSystemFlavor.LINUX:
                 raise ValueError('aptPackage is only supported when targeting Linux pools.')
             package_type = 'apt'
             apt_cmd = "=" + str(reference['version']) if reference.get('version') else ""
@@ -251,7 +251,7 @@ def _get_installation_cmdline(references, os_flavor):
         elif reference['type'] == 'chocolateyPackage':
             if package_type and package_type != 'choco':
                 raise ValueError(type_error)
-            if os_flavor != pool_utils.PoolOperatingSystemFlavor.windows:
+            if os_flavor != pool_utils.PoolOperatingSystemFlavor.WINDOWS:
                 raise ValueError(
                     'chocolateyPackage is only supported when targeting Windows pools.')
             package_type = 'choco'
@@ -263,7 +263,7 @@ def _get_installation_cmdline(references, os_flavor):
         elif reference['type'] == 'yumPackage':
             if package_type and package_type != 'yum':
                 raise ValueError(type_error)
-            if os_flavor != pool_utils.PoolOperatingSystemFlavor.linux:
+            if os_flavor != pool_utils.PoolOperatingSystemFlavor.LINUX:
                 raise ValueError('yumPackage is only supported when targeting Linux pools.')
             package_type = 'yum'
             yum_cmd = ''
@@ -274,7 +274,7 @@ def _get_installation_cmdline(references, os_flavor):
             yum_cmd = 'yum -y install {}{}'.format(reference['id'], yum_cmd)
             builder += ';' + yum_cmd if builder else yum_cmd
         # TODO: deal with rpmRepository
-        # rpm -Uvh <rpmRepository> 
+        # rpm -Uvh <rpmRepository>
         elif reference['type'] == 'applicationPackage':
             raise ValueError("ApplicationPackage type for id '{}' is not supported "
                              "in this version.".format(reference['id']))
@@ -296,12 +296,13 @@ def _get_installation_cmdline(references, os_flavor):
 
 
 def _validate_generated_job(job):
-    """Validate the partial job generated from an application template prior 
+    """Validate the partial job generated from an application template prior
     to merging it with the original job.
     :param dict job: A partial generated job specification to validate.
     """
     # Rule: The job generated by an application template may not use properties reserved for job use
-    # (This is a safety to prevent clever abuse of template syntax to specify things that shouldn't be.)
+    # (This is a safety to prevent clever abuse of template syntax
+    # to specify things that shouldn't be.)
     reserved = [k for k in job if k in _PROPS_RESERVED_FOR_JOBS]
     if reserved:
         raise ValueError("Application templates may not specify these "
@@ -357,8 +358,8 @@ def _validate_job_requesting_app_template(job, working_dir):
         raise ValueError("No filePath specified for requested application template "
                          "(define applicationTemplateInfo.filePath and try again).")
     # Rule: Template file must exist
-    # (We do this in order to give a good diagnostic in the most common case, knowing that this is 
-    # technically a race condition because someone could delete the file between our check here and 
+    # (We do this in order to give a good diagnostic in the most common case, knowing that this is
+    # technically a race condition because someone could delete the file between our check here and
     # reading the file later on. We expect such cases to be rare.)
     template_filepath = _resolve_template_file(job, working_dir)
     try:
@@ -403,7 +404,8 @@ def _validate_metadata(metadata):
     """Validate the provided metadata is valid.
     :param list metadata: A list of metadata dicts.
     """
-    # Rule: The prefix 'az_batch:' is reserved for our use and can't be specified on job nor on template.
+    # Rule: The prefix 'az_batch:' is reserved for our use
+    # and can't be specified on job nor on template.
     violation = [k for k in [m['name'] for m in metadata] if k.startswith('az_batch')]
     if violation:
         raise ValueError("Metadata item(s) '{}' cannot be used; the prefix 'az_batch:' is "
@@ -425,17 +427,17 @@ def _validate_parameter(name, content, value):
         elif content['type'] == 'bool':
             value = _validate_bool(value)
         elif content['type'] == 'string':
-            value = _validate_string(vlaue, content)
+            value = _validate_string(value, content)
         if value not in content.get('allowedValues', [value]):
             raise ValueError("Allowed values: {}".format(content['allowedValues'].join(', ')))
     except TypeError:
-        logger.warning("The value '{}' of parameter '{}' is not a {}".format(
-            name, value, content['type']))
+        logger.warning("The value '%s' of parameter '%s' is not a %s",
+                       name, value, content['type'])
         return None
     except ValueError as value_error:
         logger.warning(
-            "The value '{}' of parameter '{}' does not meet the requirement: {}".format(
-                name, value, str(value_error)))
+            "The value '%s' of parameter '%s' does not meet the requirement: %s",
+            name, value, str(value_error))
         return None
     else:
         return value
@@ -460,7 +462,8 @@ def _get_template_params(template, param_values):
                 description = values.get('metadata', {}).get('description')
                 param_prompt += " ({}): ".format(description) if description else ": "
                 param_keys[param] = prompt(param_prompt)
-                param_keys[param] = _validate_parameter(param_keys[param])
+                if not _validate_parameter(param, values, param_keys):
+                    param_keys[param] = None
     except KeyError:
         pass  # No parameters to expand
     return param_keys
@@ -531,34 +534,34 @@ def _parse_arm_concat(expression, template_obj, parameters):
 
 def _parse_arm_expression(expression, template_obj, parameters):
     """Determine if a section of the template is an ARM reference, and calculate
-    the replacement accordingly. The result will be correctly typed to suit the 
+    the replacement accordingly. The result will be correctly typed to suit the
     parameter definition (e.g. will return a number if the parameter requires a number)
     :param str expression: A section of template contained within [].
     :param dict template_obj: The loaded contents of the JSON template.
     :param dict parameters: The loaded contents of the JSON parameters.
     """
+    result = expression
     if not isinstance(str, expression):
-        return expression
+        result = expression
     if expression[0] == '[' and expression[-1] == ']':
         # Remove the enclosing brackets to check the contents
-        return _parse_arm_expression(expression[1:-1], template_obj, parameters)
+        result = _parse_arm_expression(expression[1:-1], template_obj, parameters)
     if expression[0] == '(' and expression[-1] == ')':
         # If the section is surrounded by ( ), then we need to further process the contents
         # as either a parameter name, or a concat operation
-        return _parse_arm_expression(expression[1:-1], template_obj, parameters)
+        result = _parse_arm_expression(expression[1:-1], template_obj, parameters)
     if expression[0] == '\'' and expression[-1] == '\'':
         # If a string, remove quotes in order to perform parameter look-up
-        return expression[1:-1]
+        result = expression[1:-1]
     if re.match(r'^parameters', expression):
-        return _parse_arm_parameter(expression[12:-2], template_obj, parameters)
+        result = _parse_arm_parameter(expression[12:-2], template_obj, parameters)
     elif re.match(r'^variables', expression):
-        return _parse_arm_variable(expression[11:-2], template_obj, parameters)
+        result = _parse_arm_variable(expression[11:-2], template_obj, parameters)
     elif re.match(r'^concat', expression):
-        return _parse_arm_concat(expression[7:-1], template_obj, parameters)
+        result = _parse_arm_concat(expression[7:-1], template_obj, parameters)
     elif re.match(r'^reference', expression):
         raise NotImplementedError("ARM-style 'reference' syntax not supported.")
-    else:
-        return expression
+    return result
 
 
 def _parse_template_string(string_content, template_obj, parameters):
@@ -577,15 +580,16 @@ def _parse_template_string(string_content, template_obj, parameters):
             break
         if expression_start < len(string_content) - 1 and \
             string_content[expression_start + 1] == '[':
-                # Found escaped expression
-                updated_content += string_content[current_index:expression_start] + '['
-                current_index = expression_start + 2
-                continue
+            # Found escaped expression
+            updated_content += string_content[current_index:expression_start] + '['
+            current_index = expression_start + 2
+            continue
         try:
             expression_end = _find_nested(']', string_content, expression_start + 1)
         except ValueError:  # No closing delimiter for the expression (not our problem)
             break
-        expression = string_content[expression_start + 1:expression_end]  # Everything between [ and ]
+        # Everything between [ and ]
+        expression = string_content[expression_start + 1:expression_end]
         parsed = _parse_arm_expression(expression, template_obj, parameters)
         if _is_substitution(string_content, expression_start, expression_end):
             # Replacing within the middle of a string
@@ -609,10 +613,10 @@ def _parse_template_string(string_content, template_obj, parameters):
 def _parse_template(template_str, template_obj, parameters):
     """Expand all parameters, and variables in the template.
 
-    We want to expand all template expressions (delimited by '[' and ']') in the supplied template 
-    string. However, that syntax collides with JSON syntax for arrays and we don't want to collide 
-    with any of those. To avoid such a collision, we iterate through all of the string values 
-    (delimited by double quotes (")) and then expand template expressions only within those. 
+    We want to expand all template expressions (delimited by '[' and ']') in the supplied template
+    string. However, that syntax collides with JSON syntax for arrays and we don't want to collide
+    with any of those. To avoid such a collision, we iterate through all of the string values
+    (delimited by double quotes (")) and then expand template expressions only within those.
 
     :param str template_str: Content of the template file as a string.
     :param dict template_obj: Contents of the template file.
@@ -682,12 +686,12 @@ def _parse_task_output_files(task, os_flavor):
         if not task['uploadDetails'].get('taskStatus'):
             raise ValueError("outputFile.uploadDetails must include taskStatus.")
     # Edit the command line to run the upload
-    if os_flavor == pool_utils.PoolOperatingSystemFlavor.windows:
+    if os_flavor == pool_utils.PoolOperatingSystemFlavor.WINDOWS:
         # TODO: Do we need windows shell escaping?
         upload_cmd = '%AZ_BATCH_JOB_PREP_WORKING_DIR%\\uploadfiles.py'
         full_upload_cmd = "{} & {} %errorlevel%".format(new_task['commandLine'], upload_cmd)
         new_task['commandLine'] = 'cmd /c "{}"'.format(full_upload_cmd)
-    elif os_flavor == pool_utils.PoolOperatingSystemFlavor.linux:
+    elif os_flavor == pool_utils.PoolOperatingSystemFlavor.LINUX:
         upload_cmd = '$AZ_BATCH_JOB_PREP_WORKING_DIR/uploadfiles.py'
         full_upload_cmd = _shell_escape(
             '{};err=$?;{} $err;exit $err'.format(new_task['commandLine'], upload_cmd))
@@ -711,7 +715,7 @@ def _transform_sweep_str(data, parameters):
     # Handle {n} or {n:m} scenario
     reg = re.compile(r'\{(\d+)(:(\d+))?\}')
     def replace(match):
-        r, r1, r2, r3 = [data[start:end] for start, end in match.regs]
+        r, r1, _, r3 = [data[start:end] for start, end in match.regs]
         n = int(r1)
         if n >= len(parameters):
             raise ValueError("The parameter pattern '{}' is out of bound.".format(r))
@@ -734,7 +738,7 @@ def _transform_sweep_str(data, parameters):
     return reg.sub(replace, data)
 
 
-def _transform_file_str(input, file_ref):
+def _transform_file_str(content, file_ref):
     """Replace string with file value.
     :param str input: The string to be replaced.
     :param dict file_ref: The file information, containing 'url',
@@ -742,8 +746,8 @@ def _transform_file_str(input, file_ref):
     """
     replace_props = ['url', 'filePath', 'fileName', 'fileNameWithoutExtension']
     for prop in replace_props:
-        regex = re.sub("{" + prop + "}", file_ref[prop], input)
-    return input
+        content = re.sub("{" + prop + "}", file_ref[prop], content)
+    return content
 
 
 def _replacement_transform(transformer, source_obj, source_key, context):
@@ -763,7 +767,7 @@ def _replacement_transform(transformer, source_obj, source_key, context):
     LEFT_BRACKET_REPLACE_CHAR = '\uE800'
     RIGHT_BRACKET_REPLACE_CHAR = '\uE801'
     transformed = reversed(re.sub(r'\{\{', LEFT_BRACKET_REPLACE_CHAR, source_str))
-    transformed = reversed(re.sub(r'\}\}', RIGHT_BRACKET_REPLACE_CHAR, data))
+    transformed = reversed(re.sub(r'\}\}', RIGHT_BRACKET_REPLACE_CHAR, source_str))
     transformed = transformer(transformed, context)
     if '{' in transformed or '}' in transformed:
         raise ValueError(
@@ -870,7 +874,8 @@ def _expand_parametric_sweep(factory):
         repeat_task = _parse_repeat_task(factory['repeatTask'])
     except (KeyError, TypeError):
         raise ValueError('No repeat task is defined in parametric sweep task factory.')
-    task_objs = [_transform_repeat_task(repeat_task, p, i, _transform_sweep_str) for i, p in enumerate(permutations)]
+    task_objs = [_transform_repeat_task(repeat_task, p, i, _transform_sweep_str) \
+        for i, p in enumerate(permutations)]
     try:
         merge_task = _parse_repeat_task(factory['mergeTask'])
         merge_task['id'] = 'merge'
@@ -895,8 +900,10 @@ def _expand_task_collection(factory):
             new_task = {
                 'id': task['id'],
                 'commandLine': task['commandLine']}
-        properties = {p: task.get(p) for p in _PROPS_ON_COLLECTION_TASK if task.get(p)}
-        new_task.update(properties)
+            properties = {p: task.get(p) for p in _PROPS_ON_COLLECTION_TASK if task.get(p)}
+            new_task.update(properties)
+            task_objs.append(new_task)
+        return task_objs
     except KeyError:
         raise ValueError("Each task in collection factory must have "
                          "'id' and 'commandLine' properties")
@@ -917,7 +924,8 @@ def _expand_task_per_file(factory):
     except (KeyError, TypeError):
         raise ValueError('No repeat task is defined in file iteration task factory.')
     files = file_utils.get_container_list(factory['source'])
-    task_objs = [_transform_repeat_task(repeat_task, f, i, _transform_file_str) for f, i in enumerate(files)]
+    task_objs = [_transform_repeat_task(repeat_task, f, i, _transform_file_str) \
+        for f, i in enumerate(files)]
     try:
         merge_task = _parse_repeat_task(factory['mergeTask'])
         merge_task['id'] = 'merge'
@@ -942,9 +950,10 @@ def expand_application_template(job, working_dir):
     try:
         with open(template_filepath, 'r') as file_handle:
             template_str = file_handle.read()
-            template_loaded = json.loads(template_as_str)
+            template_loaded = json.loads(template_str)
     except (EnvironmentError, ValueError) as error:
-        raise ValueError("Failed to parse JSON loaded from '{}': {}".format(template_filepath, error))
+        raise ValueError("Failed to parse JSON loaded from '{}': {}".
+                         format(template_filepath, error))
     _validate_application_template(template_loaded)
     _validate_parameter_usage(job['applicationTemplateInfo'].get('parameters'),
                               template_loaded.get('parameters'))
@@ -953,7 +962,8 @@ def expand_application_template(job, working_dir):
     metadata = _merge_metadata(job_from_template.get('metadata'), job.get('metadata'))
     _validate_metadata(metadata)
     metadata.append({'name': 'az_batch:template_filepath', 'value': template_filepath})
-    # Safety checks that "ambitious" use of templating features haven't allowed someone to bypass the rules
+    # Safety checks that "ambitious" use of
+    # templating features haven't allowed someone to bypass the rules
     _validate_generated_job(job_from_template)
     # Merge the job as defined by the application template with the original job we were given
     job.update(job_from_template)
@@ -1020,7 +1030,7 @@ def construct_setup_task(existing_task, command_info, os_flavor):
     for cmd in command_info:
         if cmd:
             commands.append(cmd['cmdLine'])
-            resources = list(set(resources.extend(cmd.get('resourceFiles',[]))))
+            resources = list(set(resources.extend(cmd.get('resourceFiles', []))))
             if is_windows is None:
                 is_windows = cmd['isWindows']
             elif is_windows != cmd['isWindows']:
@@ -1029,11 +1039,11 @@ def construct_setup_task(existing_task, command_info, os_flavor):
         return existing_task
     if result.get('commandLine'):
         commands.append(result['commandLine'])
-    resources = list(set(resources.extend(result.get('resourceFiles',[]))))
-    if os_flavor == pool_utils.PoolOperationSystemFlavor.windows:
+    resources = list(set(resources.extend(result.get('resourceFiles', []))))
+    if os_flavor == pool_utils.PoolOperatingSystemFlavor.WINDOWS:
         full_win_cmd = ' & '.join(commands)
         result['commandLine'] = 'cmd.exe /c "{}"'.format(full_win_cmd)
-    elif os_flavor == pool_utils.PoolOperatingSystemFlavor.linux:
+    elif os_flavor == pool_utils.PoolOperatingSystemFlavor.LINUX:
         # Escape the users command line
         full_linux_cmd = _shell_escape([';'.join(commands)])
         result['commandLine'] = '/bin/bash -c {}'.format(full_linux_cmd)
@@ -1070,10 +1080,10 @@ def process_job_for_output_files(job, tasks, os_flavor):
                 must_edit_job = True
     if must_edit_job:
         resource_files = list(_FILE_EGRESS_RESOURCES)
-        if os_flavor == pool_utils.PoolOperatingSystemFlavor.windows:
+        if os_flavor == pool_utils.PoolOperatingSystemFlavor.WINDOWS:
             setup_cmd = '(bootstrap.cmd && setup_uploader.py) > setuplog.txt 2>&1'
             resource_files.append('lib/commands/batch/fileegress/bootstrap.cmd')
-        elif os_flavor == pool_utils.PoolOperatingSystemFlavor.linux:
+        elif os_flavor == pool_utils.PoolOperatingSystemFlavor.LINUX:
             setup_cmd = 'setup_uploader.py > setuplog.txt 2>&1'
         else:
             raise ValueError("Unknown pool OS flavor: " + os_flavor)
@@ -1095,9 +1105,8 @@ def process_pool_package_references(pool):
     return _get_installation_cmdline(pool['packageReferences'], os_flavor)
 
 
-def process_task_package_references(job, tasks, os_flavor):
+def process_task_package_references(tasks, os_flavor):
     """Parse package reference section in the task JSON object.
-    :param dict job: A job specification.
     :param list tasks: A collection of task specifications.
     :param str os_flavor: The OS flavor of the pool.
     """
@@ -1108,7 +1117,7 @@ def process_task_package_references(job, tasks, os_flavor):
     for task in tasks:
         try:
             for package in task['packageReferences']:
-                if not pacakge.get('id') or not package.get('type'):
+                if not package.get('id') or not package.get('type'):
                     raise ValueError('A PackageReference must have a type and id element.')
                 if package['id'] not in included:
                     packages.append(package)
