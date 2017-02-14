@@ -18,5 +18,5 @@ custom_path = 'azure.cli.command_modules.ncj_batch.custom#{}'
 cli_command(__name__, 'batch file upload', custom_path.format('upload_file'), account_mgmt_client_factory)
 cli_command(__name__, 'batch file download', custom_path.format('download_file'), account_mgmt_client_factory)
 
-cli_command(__name__, 'batch pool create', custom_path.format('create_pool'), batch_data_service_factory)
-cli_command(__name__, 'batch job create', custom_path.format('create_job'), batch_data_service_factory)
+cli_command(__name__, 'batch pool create1', custom_path.format('create_pool'), batch_data_service_factory)
+cli_command(__name__, 'batch job create1', custom_path.format('create_job'), batch_data_service_factory)

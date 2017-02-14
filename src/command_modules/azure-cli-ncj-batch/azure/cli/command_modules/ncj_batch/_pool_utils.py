@@ -11,14 +11,11 @@ class PoolOperatingSystemFlavor(Enum):
 
 
 def get_pool_target_os_type(pool):
-    image_publisher = None
-    if pool.virtual_machine_configuration:
-        image_publisher = pool.virtual_machine_configuration.image_reference.publisher
+    try:
+        image_publisher = pool['virtualMachineConfiguration']['imageReference']['publisher']
+    except KeyError:
+        image_publisher = None
 
-    os_flavor = PoolOperatingSystemFlavor.WINDOWS
-    if image_publisher:
-        os_flavor = PoolOperatingSystemFlavor.WINDOWS \
-            if image_publisher.find('MicrosoftWindowsServer') \
-            else PoolOperatingSystemFlavor.LINUX
-
-    return os_flavor
+    return PoolOperatingSystemFlavor.WINDOWS \
+        if image_publisher and image_publisher.find('MicrosoftWindowsServer') \
+        else PoolOperatingSystemFlavor.LINUX

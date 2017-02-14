@@ -12,41 +12,101 @@ from azure.batch.models import (
     JobConstraints, StartTask)
 from azure.cli.command_modules.ncj_batch._file_utils import (
     FileUtils, resolve_file_paths, upload_blob)
+import azure.cli.command_modules.ncj_batch._template_utils as template_utils
+import azure.cli.command_modules.ncj_batch._pool_utils as pool_utils
 import azure.cli.core.azlogging as azlogging
 
 logger = azlogging.get_az_logger(__name__)
 
 # NCJ custom commands
 
-def create_pool(client, json_file=None, pool_id=None, vm_size=None, target_dedicated=None, #pylint:disable=too-many-arguments, W0613
-                auto_scale_formula=None, os_family=None, image_publisher=None,
-                image_offer=None, image_sku=None, node_agent_sku_id=None, resize_timeout=None,
-                start_task_cmd=None, certificate_references=None,
-                application_package_references=None, metadata=None, **kwarg):
-    if json_file:
-        with open(json_file) as f:
-            json_obj = json.load(f)
-            pool = client._deserialize('PoolAddParameter', json_obj) #pylint:disable=W0212
+def create_pool(client, template=None, parameters=None, json_file=None,  # pylint:disable=too-many-arguments, too-many-locals, W0613
+                id=None, vm_size=None, target_dedicated=None, auto_scale_formula=None,  # pylint: disable=redefined-builtin
+                enable_inter_node_communication=False, os_family=None, image=None,
+                node_agent_sku_id=None, resize_timeout=None, start_task_command_line=None,
+                start_task_resource_files=None, start_task_run_elevated=False,
+                start_task_wait_for_success=False, certificate_references=None,
+                application_package_references=None, metadata=None):
+    # pylint: disable=too-many-branches, too-many-statements
+    if template or json_file:
+        if template:
+            logger.warning('You are using an experimental feature {Pool Template}.')
+            expanded_pool_object = template_utils.expand_template(template, parameters)
+            if not 'pool' in expanded_pool_object:
+                raise ValueError('Missing pool element in the template.')
+            if not 'properties' in expanded_pool_object['pool']:
+                raise ValueError('Missing pool properties element in the template.')
+            # bulid up the jsonFile object to hand to the batch service.
+            json_obj = expanded_pool_object['pool']['properties']
+        else:
+            with open(json_file) as f:
+                json_obj = json.load(f)
+            # validate the json file
+            pool = client._deserialize('PoolAddParameter', json_obj)  #pylint:disable=W0212
             if pool is None:
                 raise ValueError("JSON file '{}' is not in correct format.".format(json_file))
+
+        # Handle package manangement
+        if 'packageReferences' in json_obj:
+            logger.warning('You are using an experimental feature {Package Management}.')
+            pool_os_flavor = pool_utils.get_pool_target_os_type(json_obj)
+            cmds = [template_utils.process_pool_package_references(json_obj)]
+            # Update the start up command
+            json_obj['startTask'] = template_utils.construct_setup_task(
+                json_obj['startTask'] if 'startTask' in json_obj else None,
+                cmds, pool_os_flavor)
+
+        # Handle any special post-processing steps.
+        # - Resource Files
+        # - etc
+        json_obj = template_utils.post_processing(json_obj)
+
+        # Batch Shipyard integration
+        if 'clientExtensions' in json_obj and 'dockerOptions' in json_obj['clientExtensions']:
+            logger.warning('You are using an experimental feature {Batch Shipyard}.')
+            # batchShipyardUtils.createPool(json_obj, options, cli)
+            # return
+
+        # We deal all NCJ work with pool, now convert back to original type
+        pool = client._deserialize('PoolAddParameter', json_obj)  #pylint:disable=W0212
+
     else:
-        pool = PoolAddParameter(pool_id, vm_size=vm_size)
+        if not id:
+            raise ValueError('Need either template, json_file, or id')
+
+        pool = PoolAddParameter(id, vm_size=vm_size)
         if target_dedicated is not None:
             pool.target_dedicated = target_dedicated
             pool.enable_auto_scale = False
         else:
             pool.auto_scale_formula = auto_scale_formula
             pool.enable_auto_scale = True
+        pool.enable_inter_node_communication = enable_inter_node_communication
 
         if os_family:
             pool.cloud_service_configuration = CloudServiceConfiguration(os_family)
         else:
-            pool.virtual_machine_configuration = VirtualMachineConfiguration(
-                ImageReference(image_publisher, image_offer, image_sku),
-                node_agent_sku_id)
+            if image:
+                version = 'latest'
+                try:
+                    publisher, offer, sku = image.split(':', 2)
+                except ValueError:
+                    message = ("Incorrect format for VM image URN. Should be in the format: \n"
+                               "'publisher:offer:sku[:version]'")
+                    raise ValueError(message)
+                try:
+                    sku, version = sku.split(':', 1)
+                except ValueError:
+                    pass
+                pool.virtual_machine_configuration = VirtualMachineConfiguration(
+                    ImageReference(publisher, offer, sku, version),
+                    node_agent_sku_id)
 
-        if start_task_cmd:
-            pool.start_task = StartTask(start_task_cmd)
+        if start_task_command_line:
+            pool.start_task = StartTask(start_task_command_line)
+            pool.start_task.run_elevated = start_task_run_elevated
+            pool.start_task.wait_for_success = start_task_wait_for_success
+            pool.start_task.resource_files = start_task_resource_files
         if resize_timeout:
             pool.resize_timeout = resize_timeout
 
@@ -57,8 +117,9 @@ def create_pool(client, json_file=None, pool_id=None, vm_size=None, target_dedic
         if application_package_references:
             pool.application_package_references = application_package_references
 
-    client.add(pool=pool)
-    return client.get(pool.id)
+    # TODO: add _handle_exception
+    client.pool.add(pool)
+    return client.pool.get(pool.id)
 
 create_pool.__doc__ = PoolAddParameter.__doc__
 

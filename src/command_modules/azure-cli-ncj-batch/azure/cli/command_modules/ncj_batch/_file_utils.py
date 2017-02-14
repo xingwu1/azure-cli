@@ -35,10 +35,12 @@ def convert_blobs_to_resource_files(blobs, resource_properties):
         raise ValueError('No input data found with reference {}'.
                          format(resource_properties.source.prefix))
 
-    if len(blobs.length) == 1 and blobs[0].file_path == resource_properties.source.prefix:
+    prefix = resource_properties['source']['prefix'] \
+        if 'prefix' in resource_properties['source'] else None
+    if len(blobs.length) == 1 and blobs[0].file_path == prefix:
         # Single file reference: filePath should be treated as file path
-        file_path = resource_properties.file_path \
-            if resource_properties.file_path else blobs[0].file_path
+        file_path = resource_properties['filePath'] \
+            if 'filePath' in resource_properties else blobs[0].file_path
         resource_files.append({
             'blobSource': blobs[0].url,
             'filePath': file_path
@@ -46,9 +48,9 @@ def convert_blobs_to_resource_files(blobs, resource_properties):
     else:
         # Multiple file reference: filePath should be treated as a directory
         base_file_path = ''
-        if resource_properties.file_path:
-            base_file_path = '{}/'.format(resource_properties.
-                                          file_path.replace(FileUtils.STRIP_PATH, ''))
+        if 'filePath' in resource_properties:
+            base_file_path = '{}/'.format(resource_properties['filePath'].
+                                          replace(FileUtils.STRIP_PATH, ''))
 
         for blob in blobs:
             file_path = '{}{}'.format(base_file_path, blob.name)
@@ -58,9 +60,9 @@ def convert_blobs_to_resource_files(blobs, resource_properties):
             })
 
     # Add filemode to every resourceFile
-    if resource_properties.file_mode:
+    if 'fileMode' in resource_properties:
         for f in resource_files:
-            f.file_mode = resource_properties.file_mode
+            f['fileMode'] = resource_properties['fileMode']
 
     return resource_files
 
@@ -195,7 +197,6 @@ class FileUtils(object):
 
     def filter_resource_cache(self, container, prefix):
         """Return all blob refeferences in a container cache that meet a prefix requirement."""
-
         filtered = []
         for blob in self.resource_file_cache[container]:
             if not prefix:
@@ -212,8 +213,8 @@ class FileUtils(object):
         blobs = blob_service.list_blobs(container)
         for blob in blobs:
             blob_sas = self.generate_sas_token(blob, container, blob_service) \
-                if source.file_group else \
-                    construct_sas_url(blob, urlsplit(source.container_url))
+                if 'fileGroup' in source else \
+                    construct_sas_url(blob, urlsplit(source['containerUrl']))
             file_name = os.path.basename(blob.name)
             file_name_only = os.path.splitext(file_name)[0]
             self.resource_file_cache[container].append(
@@ -221,7 +222,8 @@ class FileUtils(object):
                  'filePath' : blob.name,
                  'fileName' : file_name,
                  'fileNameWithoutExtension' : file_name_only})
-        return self.filter_resource_cache(container, source.prefix)
+        return self.filter_resource_cache(container,
+                                          source['prefix'] if 'prefix' in source else None)
 
 
     def generate_sas_token(self, blob, container, blob_service):
@@ -239,12 +241,12 @@ class FileUtils(object):
         storage_client = None
         container = None
 
-        if source.fileGroup:
+        if 'fileGroup' in source:
             # Input data stored in auto-storage
             storage_client = self.resolve_storage_account()
-            container = get_container_name(source.file_group)
-        elif source.container_url:
-            uri = urlsplit.urlsplit(source.container_url)
+            container = get_container_name(source['fileGroup'])
+        elif 'containerUrl' in source:
+            uri = urlsplit.urlsplit(source['containerUrl'])
             if not uri.query:
                 raise ValueError('Invalid container url.')
             storage_account_name = uri.netloc.split('.')[0]
@@ -260,14 +262,14 @@ class FileUtils(object):
 
     def resolve_resource_file(self, resource_file):
         """Convert new resourceFile reference to server-supported reference"""
-        if resource_file.blob_source:
+        if 'blobSource' in resource_file:
             # Support original resourceFile reference
-            if not resource_file.file_path:
+            if not 'filePath' in resource_file:
                 raise ValueError('Malformed ResourceFile: \'blobSource\' must '
                                  'also have \'filePath\' attribute')
             return list(resource_file)
 
-        if not resource_file.source:
+        if not 'source' in resource_file:
             raise ValueError('Malformed ResourceFile: Must have either '
                              ' \'source\' or \'blobSource\'')
 
@@ -275,18 +277,18 @@ class FileUtils(object):
         container = None
         blobs = []
 
-        if resource_file.source.file_group:
+        if 'fileGroup' in resource_file['source']:
             # Input data stored in auto-storage
-            container = get_container_name(resource_file.source.file_group)
-            blobs = self.list_container_contents(resource_file.source, container, storage_client)
+            container = get_container_name(resource_file['source']['fileGroup'])
+            blobs = self.list_container_contents(resource_file['source'], container, storage_client)
             return convert_blobs_to_resource_files(blobs, resource_file)
-        elif resource_file.source.container_url:
+        elif 'containerUrl' in resource_file['source']:
             # Input data storage in arbitrary container
-            uri = urlsplit.urlsplit(resource_file.source.containerUrl)
+            uri = urlsplit.urlsplit(resource_file['source']['containerUrl'])
             container = uri.pathname.split('/')[1]
-            blobs = self.list_container_contents(resource_file.source, container, storage_client)
+            blobs = self.list_container_contents(resource_file['source'], container, storage_client)
             return convert_blobs_to_resource_files(blobs, resource_file)
-        elif resource_file.source.url:
+        elif 'url' in resource_file['source']:
             # TODO: Input data from an arbitrary HTTP GET source
             raise ValueError('Not implemented')
         else:

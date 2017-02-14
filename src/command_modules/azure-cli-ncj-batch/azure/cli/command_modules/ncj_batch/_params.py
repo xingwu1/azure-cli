@@ -13,7 +13,7 @@ from azure.cli.core.commands.parameters import \
 
 from azure.cli.command_modules.ncj_batch._validators import \
     (application_enabled, validate_client_parameters, metadata_item_format,
-     certificate_reference_format, validate_json_file)
+     certificate_reference_format, validate_json_file, load_node_agent_skus)
 
 # pylint: disable=line-too-long
 # ARGUMENT DEFINITIONS
@@ -28,6 +28,8 @@ register_cli_argument('batch pool create', 'pool_id', help='The ID of the pool t
 register_cli_argument('batch pool create', 'application_package_references', nargs='+')  # type=application_package_reference_format)
 register_cli_argument('batch pool create', 'certificate_references', nargs='+', type=certificate_reference_format)
 register_cli_argument('batch pool create', 'metadata', nargs='+', type=metadata_item_format)
+register_cli_argument('batch pool create', 'image', completer=load_node_agent_skus, arg_group="Pool: Virtual Machine Configuration",
+                      help="OS image URN in 'publisher:offer:sku[:version]' format. Version is optional and if omitted latest will be used.\n\tValues from 'az batch pool node-agent-skus list'.\n\tExample: 'MicrosoftWindowsServer:WindowsServer:2012-R2-Datacenter:latest'")
 
 register_cli_argument('batch file upload', 'resource_group_name', resource_group_name_type, completer=None, validator=application_enabled)
 register_cli_argument('batch file upload', 'account_name', batch_name_type, options_list=('--name', '-n'))
