@@ -135,7 +135,7 @@ def _validate_bool(value):
         raise TypeError()
 
 
-def _is_substitution(template, start, end):
+def _is_substitution(content, start, end):
     """This is to support non-ARM-style direct parameter string substitution as a
     simplification of the concat function. We may wish to remove this
     if we want to adhere more strictly to ARM.
@@ -143,10 +143,9 @@ def _is_substitution(template, start, end):
     :param int start: The start index of the expression.
     :param int end: The end index of the expression.
     """
-    return not (template[start - 1] == '"' and template[end + 1] == '"')
+    return not (content[start - 1] == '"' and content[end + 1] == '"')
 
 
-# TODO: Refactor this and check escaped char handling
 def _find(delimiter, content, start_index):
     """Given that a string starts at the index specified, scan for the end of that string.
     :param str delimiter: Delimiter for which to search.
@@ -154,11 +153,14 @@ def _find(delimiter, content, start_index):
     :param int start_index: Index of the character after opening string delimiter.
     :returns: Index of the closing string delimiter.
     """
-    for index, char in enumerate(content, start=start_index):
+    index = start_index
+    while index < len(content):
+        char = content[index]
         if char == '\\':
-            continue
+            index += 1
         elif char == delimiter:
             return index
+        index += 1
     raise ValueError()
 
 
@@ -462,8 +464,7 @@ def _get_template_params(template, param_values):
                 description = values.get('metadata', {}).get('description')
                 param_prompt += " ({}): ".format(description) if description else ": "
                 param_keys[param] = prompt(param_prompt)
-                if not _validate_parameter(param, values, param_keys):
-                    param_keys[param] = None
+                param_keys[param] = _validate_parameter(param, values, param_keys[param])
     except KeyError:
         pass  # No parameters to expand
     return param_keys
@@ -541,7 +542,7 @@ def _parse_arm_expression(expression, template_obj, parameters):
     :param dict parameters: The loaded contents of the JSON parameters.
     """
     result = expression
-    if not isinstance(str, expression):
+    if not isinstance(expression, str):
         result = expression
     if expression[0] == '[' and expression[-1] == ']':
         # Remove the enclosing brackets to check the contents
@@ -575,11 +576,11 @@ def _parse_template_string(string_content, template_obj, parameters):
     current_index = 0
     while current_index < len(string_content):
         try:
-            expression_start = string_content.index('[')
+            expression_start = string_content.index('[', current_index)
         except ValueError:  # No template expression to evaluate
             break
         if expression_start < len(string_content) - 1 and \
-            string_content[expression_start + 1] == '[':
+                string_content[expression_start + 1] == '[':
             # Found escaped expression
             updated_content += string_content[current_index:expression_start] + '['
             current_index = expression_start + 2
@@ -606,8 +607,8 @@ def _parse_template_string(string_content, template_obj, parameters):
         else:
             updated_content += string_content[current_index:expression_start] + parsed
             current_index = expression_end + 1
-        updated_content += string_content[current_index:]
-        return updated_content
+    updated_content += string_content[current_index:]
+    return updated_content
 
 
 def _parse_template(template_str, template_obj, parameters):
@@ -636,10 +637,10 @@ def _parse_template(template_str, template_obj, parameters):
             break
         string_content = template_str[string_start:string_end + 1]
         if '[' in string_content:
-            updated_json += template_str[current_index, string_start]
+            updated_json += template_str[current_index:string_start]
             updated_json += _parse_template_string(string_content, template_obj, parameters)
         else:
-            updated_json += template_str[current_index, string_end + 1]
+            updated_json += template_str[current_index:string_end + 1]
         current_index = string_end + 1
     updated_json += template_str[current_index:]
     return json.loads(updated_json)
@@ -740,7 +741,7 @@ def _transform_sweep_str(data, parameters):
 
 def _transform_file_str(content, file_ref):
     """Replace string with file value.
-    :param str input: The string to be replaced.
+    :param str content: The string to be replaced.
     :param dict file_ref: The file information, containing 'url',
      'filePath etc properties.
     """
@@ -1099,7 +1100,7 @@ def process_pool_package_references(pool):
     """Parse package reference section in the pool JSON object.
     :param dict pool: A pool specification.
     """
-    if not isinstance(list, pool['packageReferences']):
+    if not isinstance(pool['packageReferences'], list):
         raise TypeError('PackageReferences of Pool has to be a collection.')
     os_flavor = pool_utils.get_pool_target_os_type(pool)
     return _get_installation_cmdline(pool['packageReferences'], os_flavor)
@@ -1135,7 +1136,7 @@ def post_processing(request):
     :param dict request: A job or task specification (or list thereof).
     """
     # Reform all new resource file references in standard ResourceFiles
-    if isinstance(list, request):
+    if isinstance(request, list):
         return [_process_resource_files(i) for i in request]
     else:
         return _process_resource_files(request)
