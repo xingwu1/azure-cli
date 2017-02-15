@@ -57,17 +57,19 @@ def get_task_counts(client, job_id):
 
 def get_target_pool(client, job):
     def action():
-        return client.pool.get(job.pool_info.pool_id)
+        pool_result = client.pool.get(job['poolInfo']['poolId'])
+        return client._serialize(pool_result, 'CloudPool')  # pylint: disable=protected-access
 
-    if not job.pool_info:
-        raise ValueError('Missing required poolInfo')
+    if not job.get('poolInfo'):
+        raise ValueError('Missing required poolInfo.')
 
     pool = None
-    if job.pool_info.pool_id:
+    if 'poolId' in job['poolInfo']:
         pool = _handle_batch_exception(action)
-    elif job.pool_info.auto_pool_specification and job.pool_info.auto_pool_specification.pool:
-        pool = job.pool_info.auto_pool_specification.pool
+    elif 'autoPoolSpecification' in job['poolInfo'] \
+        and job['poolInfo']['autoPoolSpecification'].get('pool'):
+        pool = job['poolInfo']['autoPoolSpecification']['pool']
     else:
-        raise ValueError('Missing required poolId or autoPoolSpecification.pool')
+        raise ValueError('Missing required poolId or autoPoolSpecification.pool.')
 
     return pool

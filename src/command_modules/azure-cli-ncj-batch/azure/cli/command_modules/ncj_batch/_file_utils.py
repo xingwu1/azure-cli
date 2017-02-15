@@ -35,12 +35,10 @@ def convert_blobs_to_resource_files(blobs, resource_properties):
         raise ValueError('No input data found with reference {}'.
                          format(resource_properties.source.prefix))
 
-    prefix = resource_properties['source']['prefix'] \
-        if 'prefix' in resource_properties['source'] else None
+    prefix = resource_properties.get('source', {}).get('prefix')
     if len(blobs.length) == 1 and blobs[0].file_path == prefix:
         # Single file reference: filePath should be treated as file path
-        file_path = resource_properties['filePath'] \
-            if 'filePath' in resource_properties else blobs[0].file_path
+        file_path = resource_properties.get('filePath', blobs[0].file_path)
         resource_files.append({
             'blobSource': blobs[0].url,
             'filePath': file_path
@@ -222,8 +220,7 @@ class FileUtils(object):
                  'filePath' : blob.name,
                  'fileName' : file_name,
                  'fileNameWithoutExtension' : file_name_only})
-        return self.filter_resource_cache(container,
-                                          source['prefix'] if 'prefix' in source else None)
+        return self.filter_resource_cache(container, source.get('prefix'))
 
 
     def generate_sas_token(self, blob, container, blob_service):

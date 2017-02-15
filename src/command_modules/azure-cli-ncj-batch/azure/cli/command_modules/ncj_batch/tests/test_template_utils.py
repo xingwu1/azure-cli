@@ -26,40 +26,40 @@ class TestBatchNCJTemplates(unittest.TestCase):
         definition = {'value': "['evaluateMe']"}
         template = json.dumps(definition)
         parameters = {}
-        result = utils._parse_template(template, definition, parameters)
+        result = utils._parse_template(template, definition, parameters)  # pylint:disable=protected-access
         self.assertEqual(result['value'], 'evaluateMe')
 
         # It should replace an expression within a string
         definition = {'value': "prequel ['alpha'] sequel"}
         template = json.dumps(definition)
         parameters = {}
-        result = utils._parse_template(template, definition, parameters)
+        result = utils._parse_template(template, definition, parameters)  # pylint:disable=protected-access
         self.assertEqual(result['value'], 'prequel alpha sequel')
 
         # It should replace multiple expressions within a string
         definition = {'value': "prequel ['alpha'] interquel ['beta'] sequel"}
         template = json.dumps(definition)
         parameters = {}
-        result = utils._parse_template(template, definition, parameters)
+        result = utils._parse_template(template, definition, parameters)  # pylint:disable=protected-access
         self.assertEqual(result['value'], 'prequel alpha interquel beta sequel')
 
         # It should unescape an escaped expression
         definition = {'value': "prequel [['alpha'] sequel"}
         template = json.dumps(definition)
         parameters = {}
-        result = utils._parse_template(template, definition, parameters)
+        result = utils._parse_template(template, definition, parameters)  # pylint:disable=protected-access
         self.assertEqual(result['value'], "prequel ['alpha'] sequel")
 
         # It should not choke on JSON containing string arrays
         definition = {'values': ["alpha", "beta", "gamma", "[43]"]}
         template = json.dumps(definition)
         parameters = {}
-        result = utils._parse_template(template, definition, parameters)
+        result = utils._parse_template(template, definition, parameters)  # pylint:disable=protected-access
         self.assertEqual(result['values'], ["alpha", "beta", "gamma", "43"])
 
         # It should not choke on JSON containing number arrays
         definition = {'values': [1, 1, 2, 3, 5, 8, 13]}
         template = json.dumps(definition)
         parameters = {}
-        result = utils._parse_template(template, definition, parameters)
+        result = utils._parse_template(template, definition, parameters)  # pylint:disable=protected-access
         self.assertEqual(result['values'], [1, 1, 2, 3, 5, 8, 13])
