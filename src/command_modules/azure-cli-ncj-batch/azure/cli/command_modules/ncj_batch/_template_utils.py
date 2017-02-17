@@ -13,6 +13,7 @@ try:
     from urlparse import urljoin  # Python2
 except ImportError:
     from urllib.parse import urljoin  # Python3
+import shlex  # TODO: shlex.quote may not available at 2.7
 
 from azure.cli.core.prompting import prompt
 import azure.cli.core.azlogging as azlogging
@@ -238,7 +239,7 @@ def _get_installation_cmdline(references, os_flavor):
     package_type = None
     type_error = 'PackageReferences may only contain a single type of package reference.'
     for reference in references:
-        if not reference.get('type') or reference.get('id'):
+        if not reference.get('type') or not reference.get('id'):
             raise ValueError("A PackageReference must have a 'type' and 'id' element.")
         if reference['type'] == 'aptPackage':
             if package_type and package_type != 'apt':
@@ -456,7 +457,11 @@ def _get_template_params(template, param_values):
             if 'type' not in values:
                 raise ValueError('Parameter {} does not have type defined'.format(param))
             try:
-                param_keys[param] = param_values[param]['value']
+                # Support both ARM and dictionary syntax
+                # ARM: '<PropertyName>' : { 'value' : '<PropertyValue>' }
+                # Dictionary: '<PropertyName>' : <PropertyValue>'
+                value = param_values[param]
+                param_keys[param] = value.get('value') if isinstance(value, dict) else value
             except KeyError:
                 param_keys[param] = values.get('defaultValue')
             while param_keys[param] is None:
@@ -487,7 +492,8 @@ def _parse_arm_parameter(name, template_obj, parameters):
         # Support both ARM and dictionary syntax
         # ARM: '<PropertyName>' : { 'value' : '<PropertyValue>' }
         # Dictionary: '<PropertyName>' : <PropertyValue>'
-        user_value = parameters[name].get('value', parameters[name])
+        value = parameters[name]
+        user_value = value.get('value') if isinstance(value, dict) else value
     if not user_value:
         raise ValueError("No value supplied for parameter '{}' and no default value".format(name))
     if isinstance(user_value, dict):
@@ -506,7 +512,7 @@ def _parse_arm_variable(name, template_obj, parameters):
     """
     try:
         variable = _parse_arm_expression(
-            template_obj['variables']['name'],
+            template_obj['variables'][name],
             template_obj, parameters)
     except KeyError:
         raise ValueError("Template contains no definition for variable '{}'".format(name))
@@ -541,16 +547,15 @@ def _parse_arm_expression(expression, template_obj, parameters):
     :param dict template_obj: The loaded contents of the JSON template.
     :param dict parameters: The loaded contents of the JSON parameters.
     """
-    result = expression
     if not isinstance(expression, str):
-        result = expression
+        return expression
     if expression[0] == '[' and expression[-1] == ']':
         # Remove the enclosing brackets to check the contents
-        result = _parse_arm_expression(expression[1:-1], template_obj, parameters)
+        return _parse_arm_expression(expression[1:-1], template_obj, parameters)
     if expression[0] == '(' and expression[-1] == ')':
         # If the section is surrounded by ( ), then we need to further process the contents
         # as either a parameter name, or a concat operation
-        result = _parse_arm_expression(expression[1:-1], template_obj, parameters)
+        return _parse_arm_expression(expression[1:-1], template_obj, parameters)
     if expression[0] == '\'' and expression[-1] == '\'':
         # If a string, remove quotes in order to perform parameter look-up
         result = expression[1:-1]
@@ -562,6 +567,8 @@ def _parse_arm_expression(expression, template_obj, parameters):
         result = _parse_arm_concat(expression[7:-1], template_obj, parameters)
     elif re.match(r'^reference', expression):
         raise NotImplementedError("ARM-style 'reference' syntax not supported.")
+    else:
+        result = expression
     return result
 
 
@@ -598,11 +605,11 @@ def _parse_template_string(string_content, template_obj, parameters):
             current_index = expression_end + 1
         elif isinstance(parsed, int) or isinstance(parsed, bool):
             # Replacing an entire element value, and we want to remove any surrounding quotes
-            updated_content += string_content[current_index:expression_start - 1] + parsed
+            updated_content += string_content[current_index:expression_start - 1] + str(parsed)
             current_index = expression_end + 2
         elif isinstance(parsed, dict):
             json_content = json.dumps(parsed)
-            updated_content += string_content[current_index, expression_start - 1] + json_content
+            updated_content += string_content[current_index:expression_start - 1] + json_content
             current_index = expression_end + 2
         else:
             updated_content += string_content[current_index:expression_start] + parsed
@@ -694,7 +701,7 @@ def _parse_task_output_files(task, os_flavor):
         new_task['commandLine'] = 'cmd /c "{}"'.format(full_upload_cmd)
     elif os_flavor == pool_utils.PoolOperatingSystemFlavor.LINUX:
         upload_cmd = '$AZ_BATCH_JOB_PREP_WORKING_DIR/uploadfiles.py'
-        full_upload_cmd = _shell_escape(
+        full_upload_cmd = shlex.quote(
             '{};err=$?;{} $err;exit $err'.format(new_task['commandLine'], upload_cmd))
         new_task['commandLine'] = '/bin/bash -c {}'.format(full_upload_cmd)
     else:
@@ -1027,26 +1034,23 @@ def construct_setup_task(existing_task, command_info, os_flavor):
         result = {}
     commands = []
     resources = []
-    is_windows = None
     for cmd in command_info:
         if cmd:
             commands.append(cmd['cmdLine'])
-            resources = list(set(resources.extend(cmd.get('resourceFiles', []))))
-            if is_windows is None:
-                is_windows = cmd['isWindows']
-            elif is_windows != cmd['isWindows']:
-                raise ValueError('The command is not compatible with Windows or Linux.')
+            resources.extend(cmd.get('resourceFiles', []))
+            resources = list(set(resources))
     if not commands:
         return existing_task
     if result.get('commandLine'):
         commands.append(result['commandLine'])
-    resources = list(set(resources.extend(result.get('resourceFiles', []))))
+    resources.extend(result.get('resourceFiles', []))
+    resources = list(set(resources))
     if os_flavor == pool_utils.PoolOperatingSystemFlavor.WINDOWS:
         full_win_cmd = ' & '.join(commands)
         result['commandLine'] = 'cmd.exe /c "{}"'.format(full_win_cmd)
     elif os_flavor == pool_utils.PoolOperatingSystemFlavor.LINUX:
         # Escape the users command line
-        full_linux_cmd = _shell_escape([';'.join(commands)])
+        full_linux_cmd = shlex.quote(';'.join(commands))
         result['commandLine'] = '/bin/bash -c {}'.format(full_linux_cmd)
     else:
         raise ValueError("Unknown pool OS flavor: " + os_flavor)

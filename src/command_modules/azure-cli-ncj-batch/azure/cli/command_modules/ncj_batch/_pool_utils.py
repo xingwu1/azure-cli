@@ -17,5 +17,5 @@ def get_pool_target_os_type(pool):
         image_publisher = None
 
     return PoolOperatingSystemFlavor.WINDOWS \
-        if image_publisher and image_publisher.find('MicrosoftWindowsServer') \
+        if image_publisher and image_publisher.find('MicrosoftWindowsServer') >= 0 \
         else PoolOperatingSystemFlavor.LINUX
