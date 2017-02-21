@@ -30,7 +30,7 @@ _ROOT_FILE_UPLOAD_URL = 'https://raw.githubusercontent.com/Azure/azure-xplat-cli
 _FILE_EGRESS_OVERRIDE = 'FILE_EGRESS_OVERRIDE_URL'
 _FILE_EGRESS_ENV_NAME = 'AZ_BATCH_FILE_UPLOAD_CONFIG'
 _FILE_EGRESS_RESOURCES = {
-    'lib/commands/batch/fileegress/batchfileuploader.py'
+    'lib/commands/batch/fileegress/batchfileuploader.py',
     'lib/commands/batch/fileegress/configuration.py',
     'lib/commands/batch/fileegress/requirements.txt',
     'lib/commands/batch/fileegress/setup_uploader.py',
@@ -707,10 +707,10 @@ def _parse_task_output_files(task, os_flavor):
         for prop in ['filePattern', 'destination', 'uploadDetails']:
             if prop not in output_file:
                 raise ValueError("outputFile must include '{}'".format(prop))
-        if not task['destination'].get('container', {}).get('containerSas'):
+        if not output_file['destination'].get('container', {}).get('containerSas'):
             raise ValueError("outputFile must include 'container' with "
                              "'containerSas' property.")
-        if not task['uploadDetails'].get('taskStatus'):
+        if not output_file['uploadDetails'].get('taskStatus'):
             raise ValueError("outputFile.uploadDetails must include taskStatus.")
     # Edit the command line to run the upload
     if os_flavor == pool_utils.PoolOperatingSystemFlavor.WINDOWS:
@@ -1096,16 +1096,16 @@ def process_job_for_output_files(job, tasks, os_flavor):
     :returns: A dictionary with 'cmdLine' and 'resourceFiles'.
     """
     must_edit_job = False
+    is_windows = True
     if job.get('jobManagerTask'):
         original_task = copy.deepcopy(job['jobManagerTask'])
         job['jobManagerTask'] = _parse_task_output_files(job['jobManagerTask'], os_flavor)
         if original_task != job['jobManagerTask']:
             must_edit_job = True
     if tasks:
-        for task in tasks:
-            original_task = copy.deepcopy(task)
-            task = _parse_task_output_files(task, os_flavor)
-            if original_task != task:
+        for index, task in enumerate(tasks):
+            tasks[index] = _parse_task_output_files(task, os_flavor)
+            if task != tasks[index]:
                 must_edit_job = True
     if must_edit_job:
         resource_files = list(_FILE_EGRESS_RESOURCES)
@@ -1114,13 +1114,14 @@ def process_job_for_output_files(job, tasks, os_flavor):
             resource_files.append('lib/commands/batch/fileegress/bootstrap.cmd')
         elif os_flavor == pool_utils.PoolOperatingSystemFlavor.LINUX:
             setup_cmd = 'setup_uploader.py > setuplog.txt 2>&1'
+            is_windows = False
         else:
             raise ValueError("Unknown pool OS flavor: " + os_flavor)
         # TODO: If we have any issues with this being hosted in GITHUB we'll have to
         # move it elsewhere (local and then upload to their storage?)
         resources = [{'blobSource': _get_output_source_url(f), 'filePath': os.path.split(f)[1]} \
                         for f in resource_files]
-        return {'cmdLine': setup_cmd, 'resourceFiles': resources}
+        return {'cmdLine': setup_cmd, 'resourceFiles': resources, 'isWindows': is_windows}
     return None
 
 

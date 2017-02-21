@@ -1091,193 +1091,184 @@ class TestBatchNCJTemplates(unittest.TestCase):
         self.assertFalse('taskFactory' in job)
         self.assertIsNone(job['jobPreparationTask'])
 
-#    it('should handle bad package manager configuration', function(done) {
-#      var pool = {
-#        "id": "testpool",
-#        "vmSize": "10",
-#        "targetDedicated": "STANDARD_A1",
-#        "enableAutoScale": false,
-#        "virtualMachineConfiguration": {
-#            "imageReference": {
-#              "publisher": "Canonical",
-#              "offer": "UbuntuServer",
-#              "sku": "15.10",
-#              "version": "latest"
-#            },
-#            "nodeAgentSKUId": "batch.node.debian 8"
-#        },
-#        "packageReferences": [
-#          {
-#            "type": "newPackage",
-#            "id": "ffmpeg"
-#          },
-#          {
-#            "type": "aptPackage",
-#            "id": "apache2",
-#            "version": "12.34"
-#          }
-#        ]
-#      };
-#      (function(){ templateUtils.parsePoolPackageReferences(pool); }).should.throw("Unknown PackageReference type newPackage for id ffmpeg.");
+    def test_batch_ncj_bad_packagemanager_configuration(self):
+        pool = {
+            "id": "testpool",
+            "virtualMachineConfiguration": {
+                "imageReference": {
+                    "publisher": "Canonical",
+                    "offer": "UbuntuServer",
+                    "sku": "15.10",
+                    "version": "latest"
+                },
+                "nodeAgentSKUId": "batch.node.debian 8"
+            },
+            "vmSize": "10",
+            "targetDedicated": "STANDARD_A1",
+            "enableAutoScale": False,
+            "packageReferences": [
+                {
+                    "type": "newPackage",
+                    "id": "ffmpeg"
+                },
+                {
+                    "type": "aptPackage",
+                    "id": "apache2",
+                    "version": "12.34"
+                }
+            ]
+        }
+        with self.assertRaises(ValueError):
+            utils.process_pool_package_references(pool)
 
-#      pool = {
-#        "id": "testpool",
-#        "virtualMachineConfiguration": {
-#            "imageReference": {
-#              "publisher": "Canonical",
-#              "offer": "UbuntuServer",
-#              "sku": "15.10",
-#              "version": "latest"
-#            },
-#            "nodeAgentSKUId": "batch.node.debian 8"
-#        },
-#        "vmSize": "10",
-#        "targetDedicated": "STANDARD_A1",
-#        "enableAutoScale": false,
-#        "packageReferences": [
-#          {
-#            "type": "aptPackage",
-#            "id": "apache2",
-#            "version": "12.34"
-#          },
-#          {
-#            "type": "chocolateyPackage",
-#            "id": "ffmpeg"
-#          }
-#        ]
-#      };
-#      (function(){ templateUtils.parsePoolPackageReferences(pool); }).should.throw("PackageReferences may only contain a single type of package reference.");
+        pool = {
+            "id": "testpool",
+            "virtualMachineConfiguration": {
+                "imageReference": {
+                    "publisher": "Canonical",
+                    "offer": "UbuntuServer",
+                    "sku": "15.10",
+                    "version": "latest"
+                },
+                "nodeAgentSKUId": "batch.node.debian 8"
+            },
+            "vmSize": "10",
+            "targetDedicated": "STANDARD_A1",
+            "enableAutoScale": False,
+            "packageReferences": [
+                {
+                    "type": "chocolateyPackage",
+                    "id": "ffmpeg"
+                },
+                {
+                    "type": "aptPackage",
+                    "id": "apache2",
+                    "version": "12.34"
+                }
+            ]
+        }
+        with self.assertRaises(ValueError):
+            utils.process_pool_package_references(pool)
 
-#      pool = {
-#        "id": "testpool",
-#        "virtualMachineConfiguration": {
-#            "imageReference": {
-#              "publisher": "Canonical",
-#              "offer": "UbuntuServer",
-#              "sku": "15.10",
-#              "version": "latest"
-#            },
-#            "nodeAgentSKUId": "batch.node.debian 8"
-#        },
-#        "vmSize": "10",
-#        "targetDedicated": "STANDARD_A1",
-#        "enableAutoScale": false,
-#        "packageReferences": [
-#          {
-#            "type": "chocolateyPackage",
-#            "version": "123"
-#          }
-#        ]
-#      };
-#      (function(){ templateUtils.parsePoolPackageReferences(pool); }).should.throw("A PackageReference must have a type and id element.");
+        pool = {
+            "id": "testpool",
+            "virtualMachineConfiguration": {
+                "imageReference": {
+                    "publisher": "Canonical",
+                    "offer": "UbuntuServer",
+                    "sku": "15.10",
+                    "version": "latest"
+                },
+                "nodeAgentSKUId": "batch.node.debian 8"
+            },
+            "vmSize": "10",
+            "targetDedicated": "STANDARD_A1",
+            "enableAutoScale": False,
+            "packageReferences": [
+                {
+                    "type": "aptPackage",
+                    "version": "12.34"
+                }
+            ]
+        }
+        with self.assertRaises(ValueError):
+            utils.process_pool_package_references(pool)
 
-#      done();
-#    });
-        
-#  });
-  
-#  describe('batch file egress', function () {
-#    it('should handle simple outputFiles configuration', function(done) {
-      
-#      var outputFiles = [ {
-#        filePattern: '*.txt',
-#        destination: {
-#          container: {
-#            containerSas: 'sas'
-#          }
-#        },
-#        uploadDetails: {
-#          taskStatus: 'TaskSuccess'
-#        }
-#       }];
-#      var task = { id: 'test', commandLine: 'foo.exe && /bin/bash -c "echo test"', outputFiles: outputFiles }
+    def test_batch_ncj_simple_outputfiles_configuration(self):
+        outputFiles = [{
+            'filePattern': '*.txt',
+            'destination': {
+                'container': {
+                    'containerSas': 'sas'
+                }
+            },
+            'uploadDetails': {
+                'taskStatus': 'TaskSuccess'
+            }
+        }]
+        task = {
+            'id': 'test',
+            'commandLine': 'foo.exe && /bin/bash -c "echo test"',
+            'outputFiles': outputFiles
+        }
+        new_task = utils._parse_task_output_files(task, _pool_utils.PoolOperatingSystemFlavor.LINUX)
+        expected_command_line = ("/bin/bash -c 'foo.exe && /bin/bash -c \"echo test\";err=$?;"
+                                 "$AZ_BATCH_JOB_PREP_WORKING_DIR/uploadfiles.py $err;exit $err'")
+        self.assertEqual(new_task['commandLine'], expected_command_line)
+        self.assertFalse('outputFiles' in new_task)
+        self.assertTrue('environmentSettings' in new_task)
+        self.assertEqual(len(new_task['environmentSettings']), 1)
+        self.assertEqual(new_task['environmentSettings'][0]['name'], utils._FILE_EGRESS_ENV_NAME)
+        self.assertTrue('filePattern' in new_task['environmentSettings'][0]['value'])
 
-#      var newTask = templateUtils.parseTaskOutputFiles(task, poolUtils.PoolOperatingSystemFlavor.linux);
-#      var expectedCommandLine = "/bin/bash -c 'foo.exe && /bin/bash -c \"echo test\";err=$?;$AZ_BATCH_JOB_PREP_WORKING_DIR/uploadfiles.py $err;exit $err'";
+    def test_batch_ncj_construct_jobprep_for_outputfiles(self):
+        outputFiles = [{
+            'filePattern': '*.txt',
+            'destination': {
+                'container': {
+                    'containerSas': 'sas'
+                }
+            },
+            'uploadDetails': {
+                'taskStatus': 'TaskSuccess'
+            }
+        }]
+        taskList = [{
+            'id': 'test',
+            'commandLine': 'foo.exe',
+            'outputFiles': outputFiles
+        }]
+        job = {'id': 'myJob'}
+        commands = [None]
+        commands.append(utils.process_job_for_output_files(
+            job, taskList, _pool_utils.PoolOperatingSystemFlavor.LINUX))
+        job['jobPreparationTask'] = utils.construct_setup_task(
+            job.get('jobPreparationTask'), commands, _pool_utils.PoolOperatingSystemFlavor.LINUX)
+        self.assertFalse('outputFiles' in taskList[0])
+        self.assertTrue('environmentSettings' in taskList[0])
+        self.assertEqual(len(taskList[0]['environmentSettings']), 1)
+        self.assertEqual(taskList[0]['environmentSettings'][0]['name'], utils._FILE_EGRESS_ENV_NAME)
+        self.assertTrue('filePattern' in taskList[0]['environmentSettings'][0]['value'])
+        self.assertTrue('jobPreparationTask' in job)
+        self.assertEqual(job['jobPreparationTask']['commandLine'],
+                         "/bin/bash -c 'setup_uploader.py > setuplog.txt 2>&1'")
+        self.assertTrue('resourceFiles' in job['jobPreparationTask'])
+        self.assertEqual(len(job['jobPreparationTask']['resourceFiles']), 7)
 
-#      newTask.commandLine.should.equal(expectedCommandLine);
-#      should.not.exist(newTask.outputFiles);
-#      should.exist(newTask.environmentSettings);
-#      newTask.environmentSettings.length.should.equal(1);
-#      newTask.environmentSettings[0].name.should.equal(templateUtils.fileEgressEnvName);
-#      newTask.environmentSettings[0].value.indexOf('filePattern').should.be.above(-1);
-      
-#      done();
-#    });
-
-#    it('should correctly construct jobPrepTask for outputFiles', function(done) {
-#      var outputFiles = [ {
-#        filePattern: '*.txt',
-#        destination: {
-#          container: {
-#            containerSas: 'sas'
-#          }
-#        },
-#        uploadDetails: {
-#          taskStatus: 'TaskSuccess'
-#        }
-#       }];
-#      var task = { id: 'test', commandLine: 'foo.exe', outputFiles: outputFiles };
-#      var taskList = [task];
-#      var job = { id: 'myJob' };
-
-#      var commands = [];
-#      commands.push(undefined);
-#      commands.push(templateUtils.processJobForOutputFiles(job, taskList, poolUtils.PoolOperatingSystemFlavor.linux));
-#      job.jobPreparationTask = templateUtils.constructSetupTask(job.jobPreparationTask, commands, poolUtils.PoolOperatingSystemFlavor.linux);
-#      var newJob = job;
-
-#      newJob.id.should.equal(job.id);
-#      should.not.exist(taskList[0].outputFiles);
-#      should.exist(taskList[0].environmentSettings);
-#      taskList[0].environmentSettings.length.should.equal(1);
-#      taskList[0].environmentSettings[0].name.should.equal(templateUtils.fileEgressEnvName);
-#      taskList[0].environmentSettings[0].value.indexOf('filePattern').should.be.above(-1);
-
-#      should.exist(newJob.jobPreparationTask);
-#      newJob.jobPreparationTask.commandLine.should.equal("/bin/bash -c 'setup_uploader.py > setuplog.txt 2>&1'");
-#      should.exist(newJob.jobPreparationTask.resourceFiles);
-#      newJob.jobPreparationTask.resourceFiles.length.should.equal(7);
-      
-#      done();
-#    });
-
-#    it('should correctly handle JobManagerTask with outputFiles', function(done) {
-#      var outputFiles = [ {
-#        filePattern: '*.txt',
-#        destination: {
-#          container: {
-#            containerSas: 'sas'
-#          }
-#        },
-#        uploadDetails: {
-#          taskStatus: 'TaskSuccess'
-#        }
-#       }];
-#      var task = { id: 'test', commandLine: 'foo.exe', outputFiles: outputFiles };
-#      var job = { id: 'myJob', jobManagerTask: task };
-
-#      var commands = [];
-#      commands.push(undefined);
-#      commands.push(templateUtils.processJobForOutputFiles(job, undefined, poolUtils.PoolOperatingSystemFlavor.linux));
-#      job.jobPreparationTask = templateUtils.constructSetupTask(job.jobPreparationTask, commands, poolUtils.PoolOperatingSystemFlavor.linux);
-#      var newJob = job;
-
-#      var expectedCommandLine = "/bin/bash -c 'foo.exe;err=$?;$AZ_BATCH_JOB_PREP_WORKING_DIR/uploadfiles.py $err;exit $err'";
-
-#      newJob.id.should.equal(job.id);
-#      should.not.exist(job.jobManagerTask.outputFiles);
-#      should.exist(job.jobManagerTask.environmentSettings);
-#      job.jobManagerTask.commandLine.should.equal(expectedCommandLine);
-#      job.jobManagerTask.environmentSettings.length.should.equal(1);
-#      job.jobManagerTask.environmentSettings[0].name.should.equal(templateUtils.fileEgressEnvName);
-#      job.jobManagerTask.environmentSettings[0].value.indexOf('filePattern').should.be.above(-1);
-
-#      should.exist(newJob.jobPreparationTask);
-#      newJob.jobPreparationTask.commandLine.should.equal("/bin/bash -c 'setup_uploader.py > setuplog.txt 2>&1'");
-#      should.exist(newJob.jobPreparationTask.resourceFiles);
-#      newJob.jobPreparationTask.resourceFiles.length.should.equal(7);
-      
-#      done();
-#    })
-#  });
+    def test_batch_ncj_jobmanagertask_with_outputfiles(self):
+        outputFiles = [{
+            'filePattern': '*.txt',
+            'destination': {
+                'container': {
+                    'containerSas': 'sas'
+                }
+            },
+            'uploadDetails': {
+                'taskStatus': 'TaskSuccess'
+            }
+        }]
+        task = {
+            'id': 'test',
+            'commandLine': 'foo.exe',
+            'outputFiles': outputFiles
+        }
+        job = {'id': 'myJob', 'jobManagerTask': task}
+        commands = [None]
+        commands.append(utils.process_job_for_output_files(
+            job, None, _pool_utils.PoolOperatingSystemFlavor.LINUX))
+        job['jobPreparationTask'] = utils.construct_setup_task(
+            job.get('jobPreparationTask'), commands, _pool_utils.PoolOperatingSystemFlavor.LINUX)
+        expected_command_line = ("/bin/bash -c 'foo.exe;err=$?;$AZ_BATCH_JOB_PREP_WORKING_DIR/"
+                                 "uploadfiles.py $err;exit $err'")
+        self.assertFalse('outputFiles' in job['jobManagerTask'])
+        self.assertTrue('environmentSettings' in job['jobManagerTask'])
+        self.assertEqual(job['jobManagerTask']['commandLine'], expected_command_line)
+        self.assertEqual(len(job['jobManagerTask']['environmentSettings']), 1)
+        self.assertEqual(job['jobManagerTask']['environmentSettings'][0]['name'],
+            utils._FILE_EGRESS_ENV_NAME)
+        self.assertTrue('filePattern' in job['jobManagerTask']['environmentSettings'][0]['value'])
+        self.assertTrue('jobPreparationTask' in job)
+        self.assertEqual(job['jobPreparationTask']['commandLine'],
+                         "/bin/bash -c 'setup_uploader.py > setuplog.txt 2>&1'")
+        self.assertTrue('resourceFiles' in job['jobPreparationTask'])
+        self.assertEqual(len(job['jobPreparationTask']['resourceFiles']), 7)
