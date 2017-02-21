@@ -10,10 +10,13 @@ import json
 import os
 import re
 try:
+    from shlex import quote as shell_escape
+except ImportError:
+    from pipes import quote as shell_escape
+try:
     from urlparse import urljoin  # Python2
 except ImportError:
     from urllib.parse import urljoin  # Python3
-import shlex  # TODO: shlex.quote may not available at 2.7
 
 from azure.cli.core.prompting import prompt
 import azure.cli.core.azlogging as azlogging
@@ -81,9 +84,12 @@ def _validate_int(value, content):
     :param dict content: The template parameter definition.
     :returns: int
     """
+    original = str(value)
     try:
         value = int(value)
     except ValueError:
+        raise TypeError()
+    if str(value) != original:
         raise TypeError()
     try:
         if value < int(content['minValue']):
@@ -128,9 +134,9 @@ def _validate_bool(value):
     """
     if value in [True, False]:
         return value
-    if value.lower() == 'true':
+    if str(value).lower() == 'true':
         return True
-    elif value.lower() == 'false':
+    elif str(value).lower() == 'false':
         return False
     else:
         raise TypeError()
@@ -186,7 +192,7 @@ def _find_nested(delimiter, content, start_index):
         elif char == '\'':
             index = _find('\'', content, index + 1)
         index += 1
-    raise ValueError()
+    return index
 
 
 def _get_output_source_url(path):
@@ -262,7 +268,7 @@ def _get_installation_cmdline(references, os_flavor):
             if reference.get('version'):
                 choco_cmd = " --version {}{}".format(reference['version'], choco_cmd)
             choco_cmd = "choco install {}{}".format(reference['id'], choco_cmd)
-            builder += ';' + choco_cmd if builder else choco_cmd
+            builder += ' & ' + choco_cmd if builder else choco_cmd
         elif reference['type'] == 'yumPackage':
             if package_type and package_type != 'yum':
                 raise ValueError(type_error)
@@ -287,15 +293,15 @@ def _get_installation_cmdline(references, os_flavor):
     if package_type == 'apt':
         command = 'apt-get update;' + builder
     elif package_type == 'choco':
-        command = 'powershell -NoProfile -ExecutionPolicy unrestricted \
-                    -Command "(iex ((new-object net.webclient).DownloadString\
-                    (\'https://chocolatey.org/install.ps1\')))" && SET \
-                    PATH="%PATH%;%ALLUSERSPROFILE%\\chocolatey\\bin"'
+        command = ('powershell -NoProfile -ExecutionPolicy unrestricted '
+                   '-Command "(iex ((new-object net.webclient).DownloadString'
+                   '(\'https://chocolatey.org/install.ps1\')))" && SET '
+                   'PATH="%PATH%;%ALLUSERSPROFILE%\\chocolatey\\bin"')
         command += ' && choco feature enable -n=allowGlobalConfirmation & ' + builder
         # TODO: Do we need to double check with pool agent name
     elif package_type == 'yum':
         command = builder
-    return {'cmdLine': command}
+    return {'cmdLine': command, 'isWindows': package_type == 'choco'}
 
 
 def _validate_generated_job(job):
@@ -432,7 +438,7 @@ def _validate_parameter(name, content, value):
         elif content['type'] == 'string':
             value = _validate_string(value, content)
         if value not in content.get('allowedValues', [value]):
-            raise ValueError("Allowed values: {}".format(content['allowedValues'].join(', ')))
+            raise ValueError("Allowed values: {}".format(', '.join(content['allowedValues'])))
     except TypeError:
         logger.warning("The value '%s' of parameter '%s' is not a %s",
                        name, value, content['type'])
@@ -492,16 +498,25 @@ def _parse_arm_parameter(name, template_obj, parameters):
         # Support both ARM and dictionary syntax
         # ARM: '<PropertyName>' : { 'value' : '<PropertyValue>' }
         # Dictionary: '<PropertyName>' : <PropertyValue>'
-        value = parameters[name]
-        user_value = value.get('value') if isinstance(value, dict) else value
+        user_value = parameters[name]
+        try:
+            user_value = user_value['value']
+        except TypeError:
+            pass
     if not user_value:
         raise ValueError("No value supplied for parameter '{}' and no default value".format(name))
     if isinstance(user_value, dict):
         # If substitute value is a complex object - it may require
         # additional parameter substitutions
         return _parse_template(json.dumps(user_value), template_obj, parameters)
-    # TODO: Skipped type validation - test whether actually necessary.
-    return user_value
+    if param_def['type'] == 'int':
+        return _validate_int(user_value, param_def)
+    elif param_def['type'] == 'bool':
+        return _validate_bool(user_value)
+    elif param_def['type'] == 'string':
+        return _validate_string(user_value, param_def)
+    else:
+        raise TypeError("Parameter type '{}' not supported.".format(param_def['type']))
 
 
 def _parse_arm_variable(name, template_obj, parameters):
@@ -558,7 +573,7 @@ def _parse_arm_expression(expression, template_obj, parameters):
         return _parse_arm_expression(expression[1:-1], template_obj, parameters)
     if expression[0] == '\'' and expression[-1] == '\'':
         # If a string, remove quotes in order to perform parameter look-up
-        result = expression[1:-1]
+        return expression[1:-1]
     if re.match(r'^parameters', expression):
         result = _parse_arm_parameter(expression[12:-2], template_obj, parameters)
     elif re.match(r'^variables', expression):
@@ -592,18 +607,22 @@ def _parse_template_string(string_content, template_obj, parameters):
             updated_content += string_content[current_index:expression_start] + '['
             current_index = expression_start + 2
             continue
-        try:
-            expression_end = _find_nested(']', string_content, expression_start + 1)
-        except ValueError:  # No closing delimiter for the expression (not our problem)
+        expression_end = _find_nested(']', string_content, expression_start + 1)
+        if expression_end >= len(string_content): 
+            # No closing delimiter for the expression (not our problem)
             break
         # Everything between [ and ]
         expression = string_content[expression_start + 1:expression_end]
         parsed = _parse_arm_expression(expression, template_obj, parameters)
         if _is_substitution(string_content, expression_start, expression_end):
             # Replacing within the middle of a string
-            updated_content += string_content[current_index:expression_start] + parsed
+            updated_content += string_content[current_index:expression_start] + str(parsed)
             current_index = expression_end + 1
-        elif isinstance(parsed, int) or isinstance(parsed, bool):
+        elif isinstance(parsed, bool):
+            parsed = "true" if parsed else "false"
+            updated_content += string_content[current_index:expression_start - 1] + parsed
+            current_index = expression_end + 2
+        elif isinstance(parsed, int):
             # Replacing an entire element value, and we want to remove any surrounding quotes
             updated_content += string_content[current_index:expression_start - 1] + str(parsed)
             current_index = expression_end + 2
@@ -612,7 +631,7 @@ def _parse_template_string(string_content, template_obj, parameters):
             updated_content += string_content[current_index:expression_start - 1] + json_content
             current_index = expression_end + 2
         else:
-            updated_content += string_content[current_index:expression_start] + parsed
+            updated_content += string_content[current_index:expression_start] + str(parsed)
             current_index = expression_end + 1
     updated_content += string_content[current_index:]
     return updated_content
@@ -653,21 +672,21 @@ def _parse_template(template_str, template_obj, parameters):
     return json.loads(updated_json)
 
 
-def _process_resource_files(request):
+def _process_resource_files(request, fileutils):
     """Parse a request body for any references to resource files and transform
     them to API resourceFile format where applicable.
     :param dict request: Job or task specification.
     :returns: The updated job or task specification.
     """
     if isinstance(request, list):
-        return [_process_resource_files(r) for r in request]
+        return [_process_resource_files(r, fileutils) for r in request]
     try:
         for parameter, value in request.items():
             if parameter in ['resourceFiles', 'commonResourceFiles'] and isinstance(value, list):
-                new_resources = [file_utils.resolve_resource_file(f) for f in value]
+                new_resources = [fileutils.resolve_resource_file(f) for f in value]
                 request[parameter] = new_resources
             elif isinstance(value, dict) or isinstance(value, list):
-                request[parameter] = _process_resource_files(value)
+                request[parameter] = _process_resource_files(value, fileutils)
     except AttributeError:
         # Request is not a dictionary - just return.
         pass
@@ -701,7 +720,7 @@ def _parse_task_output_files(task, os_flavor):
         new_task['commandLine'] = 'cmd /c "{}"'.format(full_upload_cmd)
     elif os_flavor == pool_utils.PoolOperatingSystemFlavor.LINUX:
         upload_cmd = '$AZ_BATCH_JOB_PREP_WORKING_DIR/uploadfiles.py'
-        full_upload_cmd = shlex.quote(
+        full_upload_cmd = shell_escape(
             '{};err=$?;{} $err;exit $err'.format(new_task['commandLine'], upload_cmd))
         new_task['commandLine'] = '/bin/bash -c {}'.format(full_upload_cmd)
     else:
@@ -774,8 +793,8 @@ def _replacement_transform(transformer, source_obj, source_key, context):
     # and '}}' to RIGHT_BRACKET_REPLACE_CHAR. The reverse function is used to handle {{{0}}}.
     LEFT_BRACKET_REPLACE_CHAR = '\uE800'
     RIGHT_BRACKET_REPLACE_CHAR = '\uE801'
-    transformed = reversed(re.sub(r'\{\{', LEFT_BRACKET_REPLACE_CHAR, source_str))
-    transformed = reversed(re.sub(r'\}\}', RIGHT_BRACKET_REPLACE_CHAR, source_str))
+    transformed = re.sub(r'\{\{', LEFT_BRACKET_REPLACE_CHAR, source_str)[::-1]
+    transformed = re.sub(r'\}\}', RIGHT_BRACKET_REPLACE_CHAR, transformed)[::-1]
     transformed = transformer(transformed, context)
     if '{' in transformed or '}' in transformed:
         raise ValueError(
@@ -808,7 +827,7 @@ def _transform_repeat_task(task, context, index, transformer):
     for env_variable in new_task.get('environmentSettings', []):
         for param in ['name', 'value']:
             env_variable.update(_replacement_transform(transformer, env_variable, param, context))
-    for output in new_task.get('outputFiles'):
+    for output in new_task.get('outputFiles', []):
         output.update(_replacement_transform(transformer, output, 'filePattern', context))
         try:
             for param in ['path', 'containerSas']:
@@ -833,6 +852,8 @@ def _parse_parameter_sets(parameter_sets):
     """Parse parametric sweep set, and return all possible values in array.
     :param list parameter_sets: An array of parameter sets.
     """
+    if not parameter_sets:
+        raise ValueError('No parameter set is defined.')
     iterations = []
     for params in parameter_sets:
         try:
@@ -851,7 +872,8 @@ def _parse_parameter_sets(parameter_sets):
         elif start < end and step < 0:
             raise ValueError(
                 "'step' must be a positive number when 'end' is greater than 'start'")
-        iterations.append(range(start, end + 1, step))
+        end = end + 1 if end >= start else end - 1
+        iterations.append(range(start, end, step))
     return itertools.product(*iterations)
 
 
@@ -1027,30 +1049,32 @@ def construct_setup_task(existing_task, command_info, os_flavor):
     :param dict os_flavor: The OS flavor of the pool.
     :returns: An updated start task or job prep task.
     """
-    # TODO: _shell_escape
     if existing_task:
         result = copy.deepcopy(existing_task)
     else:
         result = {}
     commands = []
     resources = []
+    is_windows = None
     for cmd in command_info:
         if cmd:
             commands.append(cmd['cmdLine'])
             resources.extend(cmd.get('resourceFiles', []))
-            resources = list(set(resources))
+            if is_windows is None:
+                is_windows = cmd['isWindows']
+            elif is_windows != cmd['isWindows']:
+                raise ValueError('The command is not compatible with Windows or Linux.')
     if not commands:
         return existing_task
     if result.get('commandLine'):
         commands.append(result['commandLine'])
     resources.extend(result.get('resourceFiles', []))
-    resources = list(set(resources))
     if os_flavor == pool_utils.PoolOperatingSystemFlavor.WINDOWS:
         full_win_cmd = ' & '.join(commands)
         result['commandLine'] = 'cmd.exe /c "{}"'.format(full_win_cmd)
     elif os_flavor == pool_utils.PoolOperatingSystemFlavor.LINUX:
         # Escape the users command line
-        full_linux_cmd = shlex.quote(';'.join(commands))
+        full_linux_cmd = shell_escape(';'.join(commands))
         result['commandLine'] = '/bin/bash -c {}'.format(full_linux_cmd)
     else:
         raise ValueError("Unknown pool OS flavor: " + os_flavor)
@@ -1135,15 +1159,15 @@ def process_task_package_references(tasks, os_flavor):
     return _get_installation_cmdline(packages, os_flavor)
 
 
-def post_processing(request):
+def post_processing(request, fileutils):
     """Parse job or task to process new resource file references.
     :param dict request: A job or task specification (or list thereof).
     """
     # Reform all new resource file references in standard ResourceFiles
     if isinstance(request, list):
-        return [_process_resource_files(i) for i in request]
+        return [_process_resource_files(i, fileutils) for i in request]
     else:
-        return _process_resource_files(request)
+        return _process_resource_files(request, fileutils)
 
 
 def should_get_pool(tasks):

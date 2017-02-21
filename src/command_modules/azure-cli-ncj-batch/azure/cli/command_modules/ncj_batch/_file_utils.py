@@ -264,7 +264,7 @@ class FileUtils(object):
             if not 'filePath' in resource_file:
                 raise ValueError('Malformed ResourceFile: \'blobSource\' must '
                                  'also have \'filePath\' attribute')
-            return list(resource_file)
+            return dict(resource_file)
 
         if not 'source' in resource_file:
             raise ValueError('Malformed ResourceFile: Must have either '
