@@ -31,29 +31,29 @@ def construct_sas_url(blob, uri):
 def convert_blobs_to_resource_files(blobs, resource_properties):
     """Convert a list of blobs to a list of ResourceFiles"""
     resource_files = []
-    if not blobs or len(blobs) == 0:
+    if not blobs:
         raise ValueError('No input data found with reference {}'.
-                         format(resource_properties.source.prefix))
+                         format(resource_properties['source']['prefix']))
 
     prefix = resource_properties.get('source', {}).get('prefix')
-    if len(blobs.length) == 1 and blobs[0].file_path == prefix:
+    if len(blobs) == 1 and blobs[0]['filePath'] == prefix:
         # Single file reference: filePath should be treated as file path
-        file_path = resource_properties.get('filePath', blobs[0].file_path)
+        file_path = resource_properties.get('filePath', blobs[0]['filePath'])
         resource_files.append({
-            'blobSource': blobs[0].url,
+            'blobSource': blobs[0]['url'],
             'filePath': file_path
         })
     else:
         # Multiple file reference: filePath should be treated as a directory
         base_file_path = ''
         if 'filePath' in resource_properties:
-            base_file_path = '{}/'.format(resource_properties['filePath'].
-                                          replace(FileUtils.STRIP_PATH, ''))
+            base_file_path = '{}/'.format(
+                FileUtils.STRIP_PATH.sub('', resource_properties['filePath']))
 
         for blob in blobs:
-            file_path = '{}{}'.format(base_file_path, blob.name)
+            file_path = '{}{}'.format(base_file_path, blob['filePath'])
             resource_files.append({
-                'blobSource': blob.url,
+                'blobSource': blob['url'],
                 'filePath': file_path
             })
 
@@ -67,14 +67,17 @@ def convert_blobs_to_resource_files(blobs, resource_properties):
 
 def resolve_file_paths(local_path):
     """Generate list of files to upload and the relative directory"""
-    local_path = re.sub(FileUtils.STRIP_PATH, "", local_path)
+    local_path = FileUtils.STRIP_PATH.sub("", local_path)
     files = []
     if local_path.find('*') > -1:
         # Supplied path is a pattern - relative directory will be the
         # path up to the first wildcard
-        files = glob.glob(local_path)
         ref_dir = local_path.split('*')[0]
-        local_path = os.path.dirname(re.sub(FileUtils.STRIP_PATH, "", ref_dir))
+        recursive = '**' in local_path
+        files = [f for f in glob.glob(local_path, recursive=recursive) if os.path.isfile(f)]
+        local_path = FileUtils.STRIP_PATH.sub("", ref_dir)
+        if not os.path.isdir(local_path):
+            local_path = os.path.dirname(local_path)
     else:
         if os.path.isdir(local_path):
             # Supplied path is a directory
@@ -140,8 +143,8 @@ def upload_blob(source, destination, file_name,  # pylint: disable=too-many-argu
     blob_name = file_name
     if remote_path:
         # Add any specified virtual directories
-        blob_prefix = re.sub(FileUtils.STRIP_PATH, remote_path, '')
-        blob_name = '{}/{}'.format(blob_prefix, re.sub(FileUtils.STRIP_PATH, file_name, ''))
+        blob_prefix = FileUtils.STRIP_PATH.sub('', remote_path)
+        blob_name = '{}/{}'.format(blob_prefix, FileUtils.STRIP_PATH.sub('', file_name))
     blob_name = blob_name.replace('\\', '/')
 
     # We store the lastmodified timestamp in order to prevent overwriting with
@@ -176,7 +179,7 @@ def upload_blob(source, destination, file_name,  # pylint: disable=too-many-argu
 
 class FileUtils(object):
 
-    STRIP_PATH = r"^[/\\]+|[/\\]+$"
+    STRIP_PATH = re.compile(r"^[/\\]+|[/\\]+$")
     GROUP_PREFIX = 'fgrp-'
     MAX_GROUP_LENGTH = 63 - len(GROUP_PREFIX)
     MAX_FILE_SIZE = 50000 * 4 * 1024 * 1024
@@ -199,7 +202,7 @@ class FileUtils(object):
         for blob in self.resource_file_cache[container]:
             if not prefix:
                 filtered.append(blob)
-            elif blob.file_path.startswith(prefix):
+            elif blob['filePath'].startswith(prefix):
                 filtered.append(blob)
         return filtered
 

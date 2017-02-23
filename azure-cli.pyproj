@@ -209,6 +209,9 @@
     <Compile Include="command_modules\azure-cli-batch\setup.py" />
     <Compile Include="command_modules\azure-cli-ncj-batch\azure\cli\command_modules\ncj_batch\commands.py" />
     <Compile Include="command_modules\azure-cli-ncj-batch\azure\cli\command_modules\ncj_batch\custom.py" />
+    <Compile Include="command_modules\azure-cli-ncj-batch\azure\cli\command_modules\ncj_batch\tests\test_file_utils.py">
+      <SubType>Code</SubType>
+    </Compile>
     <Compile Include="command_modules\azure-cli-ncj-batch\azure\cli\command_modules\ncj_batch\tests\test_template_utils.py" />
     <Compile Include="command_modules\azure-cli-ncj-batch\azure\cli\command_modules\ncj_batch\tests\__init__.py" />
     <Compile Include="command_modules\azure-cli-ncj-batch\azure\cli\command_modules\ncj_batch\_client_factory.py" />
