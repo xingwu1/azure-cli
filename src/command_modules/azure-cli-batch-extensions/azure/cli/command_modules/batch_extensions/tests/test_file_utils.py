@@ -8,8 +8,8 @@ import os
 import unittest
 import mock
 
-from azure.cli.command_modules.ncj_batch import _pool_utils
-from azure.cli.command_modules.ncj_batch import _file_utils as utils
+from azure.cli.command_modules.batch_extensions import _pool_utils
+from azure.cli.command_modules.batch_extensions import _file_utils as utils
 
 
 class TestBatchNCJFiles(unittest.TestCase):
@@ -18,8 +18,8 @@ class TestBatchNCJFiles(unittest.TestCase):
     def setUp(self):
         self.data_dir = os.path.join(os.path.dirname(__file__), 'data')
         self.file_dir = os.path.join(self.data_dir, 'file_tests')
-        self.win_base = (".\\command_modules\\azure-cli-ncj-batch\\azure\\cli\\"
-                         "command_modules\\ncj_batch\\tests\\data")
+        self.win_base = (".\\command_modules\\azure-cli-batch-extensions\\azure\\cli\\"
+                         "command_modules\\batch_extensions\\tests\\data")
         self.nix_base = self.win_base.replace('\\', '/')
         return super(TestBatchNCJFiles, self).setUp()
 

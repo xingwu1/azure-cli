@@ -39,9 +39,9 @@ with open('HISTORY.rst', 'r', encoding='utf-8') as f:
     HISTORY = f.read()
 
 setup(
-    name='azure-cli-ncj-batch',
+    name='azure-cli-batch-extensions',
     version=VERSION,
-    description='Microsoft Azure Command-Line Tools Batch Command Module NCJ Extension',
+    description='Microsoft Azure Command-Line Tools Extended Batch Command Module',
     long_description=README + '\n\n' + HISTORY,
     license='MIT',
     author='Microsoft Corporation',
@@ -54,7 +54,7 @@ setup(
         'azure.cli.command_modules'
     ],
     packages=[
-        'azure.cli.command_modules.ncj_batch'
+        'azure.cli.command_modules.batch_extensions'
     ],
     install_requires=DEPENDENCIES,
 )

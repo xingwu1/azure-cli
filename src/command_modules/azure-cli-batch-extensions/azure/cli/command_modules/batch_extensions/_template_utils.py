@@ -20,8 +20,8 @@ except ImportError:
 
 from azure.cli.core.prompting import prompt
 import azure.cli.core.azlogging as azlogging
-import azure.cli.command_modules.ncj_batch._file_utils as file_utils
-import azure.cli.command_modules.ncj_batch._pool_utils as pool_utils
+import azure.cli.command_modules.batch_extensions._file_utils as file_utils
+import azure.cli.command_modules.batch_extensions._pool_utils as pool_utils
 
 logger = azlogging.get_az_logger(__name__)
 

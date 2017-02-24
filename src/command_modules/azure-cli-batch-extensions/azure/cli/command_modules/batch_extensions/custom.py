@@ -10,11 +10,11 @@ from azure.batch.models import (
     PoolAddParameter, CloudServiceConfiguration, VirtualMachineConfiguration,
     ImageReference, PoolInformation, JobAddParameter, JobManagerTask,
     JobConstraints, StartTask)
-from azure.cli.command_modules.ncj_batch._file_utils import (
+from azure.cli.command_modules.batch_extensions._file_utils import (
     FileUtils, resolve_file_paths, upload_blob)
-import azure.cli.command_modules.ncj_batch._template_utils as template_utils
-import azure.cli.command_modules.ncj_batch._pool_utils as pool_utils
-import azure.cli.command_modules.ncj_batch._job_utils as job_utils
+import azure.cli.command_modules.batch_extensions._template_utils as template_utils
+import azure.cli.command_modules.batch_extensions._pool_utils as pool_utils
+import azure.cli.command_modules.batch_extensions._job_utils as job_utils
 import azure.cli.core.azlogging as azlogging
 
 logger = azlogging.get_az_logger(__name__)

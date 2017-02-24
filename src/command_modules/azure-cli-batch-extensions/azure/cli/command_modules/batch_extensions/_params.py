@@ -11,7 +11,7 @@ from azure.cli.core.commands.parameters import \
     (resource_group_name_type,
      get_resource_name_completion_list, file_type)
 
-from azure.cli.command_modules.ncj_batch._validators import \
+from azure.cli.command_modules.batch_extensions._validators import \
     (application_enabled, validate_client_parameters, metadata_item_format,
      certificate_reference_format, validate_json_file, load_node_agent_skus)
 

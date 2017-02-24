@@ -73,8 +73,7 @@ def resolve_file_paths(local_path):
         # Supplied path is a pattern - relative directory will be the
         # path up to the first wildcard
         ref_dir = local_path.split('*')[0]
-        recursive = '**' in local_path
-        files = [f for f in glob.glob(local_path, recursive=recursive) if os.path.isfile(f)]
+        files = [f for f in glob.glob(local_path, recursive=True) if os.path.isfile(f)]
         local_path = FileUtils.STRIP_PATH.sub("", ref_dir)
         if not os.path.isdir(local_path):
             local_path = os.path.dirname(local_path)

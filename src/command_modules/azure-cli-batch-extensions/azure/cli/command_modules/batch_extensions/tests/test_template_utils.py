@@ -7,9 +7,9 @@ import json
 import os
 import unittest
 
-from azure.cli.command_modules.ncj_batch import _template_utils as utils
-from azure.cli.command_modules.ncj_batch import _pool_utils
-from azure.cli.command_modules.ncj_batch import _file_utils
+from azure.cli.command_modules.batch_extensions import _template_utils as utils
+from azure.cli.command_modules.batch_extensions import _pool_utils
+from azure.cli.command_modules.batch_extensions import _file_utils
 
 
 class TestBatchNCJTemplates(unittest.TestCase):
